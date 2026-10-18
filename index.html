@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daily Sports Schedule</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EDF0F3; --card:#FFFFFF; --ink:#13202D; --muted:#5E6C7A; --line:#D6DCE2;
+  --chip:#FFFFFF; --chip-on:#13202D; --chip-on-ink:#FFFFFF; --live:#C8321F; --win:#13202D;
+  --nfl:#1B4F9C; --mlb:#C8321F; --nba:#D9781A; --nhl:#0E8FA6; --ncaaf:#2E8B3F; --ncaam:#7B4FB8;
+  --disp:"Barlow Condensed","Arial Narrow","Helvetica Neue",Arial,sans-serif;
+  --body:"Barlow","Helvetica Neue",Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D131A; --card:#151E28; --ink:#E9EEF3; --muted:#93A1AF; --line:#25313E;
+    --chip:#151E28; --chip-on:#E9EEF3; --chip-on-ink:#0D131A; --live:#FF6B57; --win:#FFFFFF;
+    --nfl:#5C93E6; --mlb:#FF6B57; --nba:#F09A45; --nhl:#3CC3DB; --ncaaf:#5CC06D; --ncaam:#A98AE0;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D131A; --card:#151E28; --ink:#E9EEF3; --muted:#93A1AF; --line:#25313E;
+  --chip:#151E28; --chip-on:#E9EEF3; --chip-on-ink:#0D131A; --live:#FF6B57; --win:#FFFFFF;
+  --nfl:#5C93E6; --mlb:#FF6B57; --nba:#F09A45; --nhl:#3CC3DB; --ncaaf:#5CC06D; --ncaam:#A98AE0;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.4;-webkit-text-size-adjust:100%}
+.wrap{max-width:640px;margin:0 auto;padding:16px 14px 40px}
+h1{font-family:var(--disp);font-weight:700;font-size:34px;line-height:1;margin:6px 0 2px;letter-spacing:.2px}
+.sub{color:var(--muted);font-size:14px;margin-bottom:14px}
+.days{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 10px;margin:0 -14px;padding-left:14px;padding-right:14px;scrollbar-width:none}
+.days::-webkit-scrollbar{display:none}
+.day{flex:0 0 auto;min-width:58px;text-align:center;background:var(--chip);border:1px solid var(--line);border-radius:10px;padding:7px 8px 6px;color:var(--ink);font:inherit;cursor:pointer}
+.day .w{display:block;font-size:12.5px;color:var(--muted)}
+.day .d{display:block;font-family:var(--disp);font-weight:700;font-size:24px;line-height:1.05}
+.day .n{display:block;font-size:11.5px;color:var(--muted)}
+.day[aria-selected="true"]{background:var(--chip-on);color:var(--chip-on-ink);border-color:var(--chip-on)}
+.day[aria-selected="true"] .w,.day[aria-selected="true"] .n{color:var(--chip-on-ink);opacity:.8}
+.day.zero{opacity:.55}
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin:2px 0 10px}
+.chip{display:inline-flex;align-items:center;gap:7px;background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:6px 12px 6px 10px;font:600 14px var(--body);color:var(--ink);cursor:pointer}
+.chip i{width:10px;height:10px;border-radius:3px;background:var(--c)}
+.chip[aria-pressed="false"]{opacity:.45}
+.chip[aria-pressed="false"] i{background:transparent;outline:1.5px solid var(--c);outline-offset:-1.5px}
+input[type=search]{width:100%;font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:16px}
+input[type=search]::placeholder{color:var(--muted)}
+:focus-visible{outline:2px solid var(--nfl);outline-offset:2px}
+.head{font-family:var(--disp);font-weight:600;font-size:22px;margin:0 0 12px}
+.grp{background:var(--card);border:1px solid var(--line);border-left:6px solid var(--c);border-radius:6px 12px 12px 6px;margin-bottom:14px;overflow:hidden}
+.grp h2{font-family:var(--disp);font-weight:700;font-size:21px;margin:0;padding:9px 14px 7px;display:flex;justify-content:space-between;align-items:baseline}
+.grp h2 span{font-family:var(--body);font-weight:500;font-size:13px;color:var(--muted)}
+.g{display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid var(--line)}
+.time{font-family:var(--disp);font-weight:600;font-size:20px;line-height:1.05}
+.time small{display:block;font-family:var(--body);font-weight:400;font-size:11.5px;color:var(--muted)}
+.tm{display:flex;justify-content:space-between;gap:10px}
+.tm+.tm{margin-top:1px}
+.tm .sc{font-family:var(--disp);font-weight:600;font-size:19px;line-height:1.1;min-width:22px;text-align:right}
+.tm.w{font-weight:600;color:var(--win)} .tm.l{color:var(--muted)}
+.at{color:var(--muted);font-size:12.5px;margin-top:3px}
+.tag{color:var(--c);font-weight:600}
+.st{font-size:12.5px;color:var(--muted);text-align:right;min-width:64px}
+.st.live{color:var(--live);font-weight:600}
+.off{padding:9px 14px 11px;border-top:1px solid var(--line);color:var(--muted);font-size:14px}
+.empty{padding:26px 14px;text-align:center;color:var(--muted)}
+footer{margin-top:22px;color:var(--muted);font-size:12.5px;line-height:1.5}
+@media (max-width:380px){.g{grid-template-columns:56px 1fr auto;gap:8px;padding:10px}h1{font-size:30px}}
+@media (prefers-reduced-motion:no-preference){.day,.chip{transition:background .15s,opacity .15s}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Daily sports schedule</h1>
+  <div class="sub" id="sub"></div>
+  <div class="days" id="days" role="tablist" aria-label="Choose a day"></div>
+  <div class="chips" id="chips"></div>
+  <input type="search" id="q" placeholder="Filter by team, like Cardinals or Yankees" aria-label="Filter by team">
+  <div class="head" id="head"></div>
+  <main id="out"></main>
+  <footer id="foot"></footer>
+</div>
+<script src="data.js"></script>
+<script>
+const TZ = 'America/Phoenix';
+const LEAGUES = [
+  {k:'NFL',  n:'NFL',  c:'var(--nfl)'},
+  {k:'NCAAF',n:'College football', c:'var(--ncaaf)'},
+  {k:'MLB',  n:'MLB',  c:'var(--mlb)'},
+  {k:'NBA',  n:'NBA',  c:'var(--nba)'},
+  {k:'NHL',  n:'NHL',  c:'var(--nhl)'},
+  {k:'NCAAM',n:'College basketball', c:'var(--ncaam)'}
+];
+const DATA = window.SPORTS_DATA || { generated: null, games: [] };
+const G = DATA.games.map(x => Object.assign({ ts: Date.parse(x.t) }, x));
+
+/* ---------- helpers ---------- */
+const fKey  = new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'});
+const fTime = new Intl.DateTimeFormat('en-US',{timeZone:TZ,hour:'numeric',minute:'2-digit'});
+const fWk   = new Intl.DateTimeFormat('en-US',{timeZone:TZ,weekday:'short'});
+const fDay  = new Intl.DateTimeFormat('en-US',{timeZone:TZ,day:'numeric'});
+const fLong = new Intl.DateTimeFormat('en-US',{timeZone:TZ,weekday:'long',month:'long',day:'numeric'});
+const fShort= new Intl.DateTimeFormat('en-US',{timeZone:TZ,weekday:'short',month:'short',day:'numeric'});
+const key = ts => fKey.format(new Date(ts));
+const esc = s => String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+G.forEach(x => { x.k = key(x.ts); });
+G.sort((a,b)=>a.ts-b.ts);
+
+const allDates = Array.from(new Set(G.map(x=>x.k))).sort();
+const state = { day:null, on:new Set(LEAGUES.map(l=>l.k)), q:'' };
+
+function pickDefaultDay(){
+  if (!allDates.length) return null;
+  const today = key(Date.now());
+  if (allDates.includes(today)) return today;
+  const next = allDates.find(d => d > today);
+  return next || allDates[allDates.length-1];
+}
+state.day = pickDefaultDay();
+const NO_DATA = allDates.length === 0;
+
+function visible(x){
+  if (!state.on.has(x.l)) return false;
+  if (state.q){ const q = state.q.toLowerCase(); if (!(x.a.toLowerCase().includes(q) || x.h.toLowerCase().includes(q))) return false; }
+  return true;
+}
+function relTime(ts){
+  const m = Math.round((ts - Date.now())/60000);
+  if (m <= 0 || m > 1440) return '';
+  if (m < 60) return 'in ' + m + ' min';
+  const h = Math.floor(m/60), r = m % 60;
+  return 'in ' + h + ' h' + (r ? ' ' + r + ' min' : '');
+}
+function favLine(x){
+  if (x.pa == null || x.ph == null) return '';
+  const away = x.pa >= x.ph;
+  const name = away ? x.a : x.h, p = Math.round(away ? x.pa : x.ph);
+  if (p === 50) return 'Even odds';
+  return name + ' favored (' + p + '%)';
+}
+
+/* ---------- render ---------- */
+function renderDays(){
+  const el = document.getElementById('days');
+  el.innerHTML = allDates.map(d => {
+    const ts = Date.parse(d + 'T12:00:00-07:00');
+    const n = G.filter(x => x.k === d && visible(x)).length;
+    return '<button class="day' + (n ? '' : ' zero') + '" role="tab" data-d="' + d + '" aria-selected="' + (d === state.day) + '">' +
+      '<span class="w">' + fWk.format(ts) + '</span><span class="d">' + fDay.format(ts) + '</span><span class="n">' + n + (n === 1 ? ' game' : ' games') + '</span></button>';
+  }).join('');
+  el.querySelectorAll('.day').forEach(b => b.addEventListener('click', () => { state.day = b.dataset.d; render(); }));
+  const sel = el.querySelector('[aria-selected="true"]');
+  if (sel && sel.scrollIntoView) { const r = sel.getBoundingClientRect(); if (r.left < 0 || r.right > innerWidth) el.scrollLeft = sel.offsetLeft - 14; }
+}
+function renderChips(){
+  const el = document.getElementById('chips');
+  el.innerHTML = LEAGUES.map(l => '<button class="chip" style="--c:' + l.c + '" data-k="' + l.k + '" aria-pressed="' + state.on.has(l.k) + '"><i></i>' + l.n + '</button>').join('');
+  el.querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => {
+    const k = b.dataset.k; state.on.has(k) ? state.on.delete(k) : state.on.add(k); render();
+  }));
+}
+function gameRow(x, color){
+  const fin = x.st === 'final', live = x.st === 'live', has = fin || live;
+  const aWin = fin && x.sa > x.sh, hWin = fin && x.sh > x.sa;
+  let status = '';
+  if (fin) status = 'Final';
+  else if (live) status = '<span class="live">Last update</span>' + (x.c ? '<br>' + esc(x.c) : '');
+  else if (x.ts < Date.now() - 4*3600*1000) status = 'Score not updated';
+  else status = esc(relTime(x.ts));
+  const fav = has ? '' : (favLine(x) || (x.line ? 'Line: ' + x.line : ''));
+  const sub = [x.tag ? '<span class="tag">' + esc(x.tag) + '</span>' : '', x.tv ? 'TV: ' + esc(x.tv) : '', fav ? esc(fav) : ''].filter(Boolean).join(' &nbsp;|&nbsp; ');
+  let t = fTime.format(new Date(x.ts)).replace(' AM','').replace(' PM','');
+  let ap = /AM/.test(fTime.format(new Date(x.ts))) ? 'AM' : 'PM';
+  if (x.tbd) { t = 'TBD'; ap = ''; status = ''; }
+  return '<div class="g" style="--c:' + color + '">' +
+    '<div class="time">' + t + '<small>' + ap + '</small></div>' +
+    '<div><div class="tm ' + (aWin ? 'w' : (fin ? 'l' : '')) + '"><span>' + esc(x.a) + '</span>' + (has ? '<span class="sc">' + x.sa + '</span>' : '') + '</div>' +
+    '<div class="tm ' + (hWin ? 'w' : (fin ? 'l' : '')) + '"><span>' + esc(x.h) + '</span>' + (has ? '<span class="sc">' + x.sh + '</span>' : '') + '</div>' +
+    (sub ? '<div class="at">' + sub + '</div>' : '') + '</div>' +
+    '<div class="st' + (live ? ' live' : '') + '">' + status + '</div></div>';
+}
+function renderList(){
+  const out = document.getElementById('out');
+  const ts = Date.parse(state.day + 'T12:00:00-07:00');
+  document.getElementById('head').textContent = fLong.format(ts) + (state.day === key(Date.now()) ? ' (today)' : '');
+  let html = '', shown = 0;
+  LEAGUES.forEach(l => {
+    if (!state.on.has(l.k)) return;
+    const rows = G.filter(x => x.l === l.k && x.k === state.day && visible(x));
+    if (rows.length){
+      shown += rows.length;
+      html += '<section class="grp" style="--c:' + l.c + '"><h2>' + l.n + '<span>' + rows.length + (rows.length === 1 ? ' game' : ' games') + '</span></h2>' + rows.map(r => gameRow(r, l.c)).join('') + '</section>';
+    } else if (!state.q){
+      const all = G.filter(x => x.l === l.k);
+      const nxt = all.find(x => x.k > state.day);
+      let msg;
+      if (nxt) msg = 'No games today. Next up: ' + fShort.format(new Date(nxt.ts)) + '.';
+      else if (all.length) msg = 'No games listed after this day.';
+      else msg = 'No games in the schedule feed right now (offseason).';
+      html += '<section class="grp" style="--c:' + l.c + '"><h2>' + l.n + '</h2><div class="off">' + msg + '</div></section>';
+    }
+  });
+  if (!html || (state.q && !shown)) html = '<div class="empty">No games match. Try another day or clear the team filter.</div>';
+  out.innerHTML = html;
+}
+function render(){
+  if (NO_DATA){ document.getElementById('out').innerHTML = '<div class="empty">No schedule data found. Run the update workflow or check that data.js is in the same folder as this page.</div>'; return; }
+  renderDays(); renderChips(); renderList();
+  const total = G.filter(x => x.k === state.day && visible(x)).length;
+  document.getElementById('sub').textContent = total + (total === 1 ? ' game' : ' games') + ' across the leagues you have turned on';
+}
+document.getElementById('q').addEventListener('input', e => { state.q = e.target.value.trim(); render(); });
+render();
+(function(){
+  const f = document.getElementById('foot');
+  const when = DATA.generated ? new Intl.DateTimeFormat('en-US',{timeZone:TZ,weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(DATA.generated)) + ' MST' : 'unknown';
+  let text = 'All times are Arizona time (MST, no daylight saving). Schedule last updated ' + when + '. Scores and lines are as of that update, not live.';
+  // Flag leagues whose data was not refreshed in the latest update run.
+  if (DATA.updated && DATA.generated) {
+    const late = LEAGUES.filter(l => DATA.updated[l.k] && Date.parse(DATA.generated) - Date.parse(DATA.updated[l.k]) > 2 * 86400000)
+      .map(l => l.n + ' (last full refresh ' + fShort.format(new Date(DATA.updated[l.k])) + ')');
+    if (late.length) text += ' Could not fully refresh: ' + late.join(', ') + '. Games shown for those may be out of date.';
+  }
+  if (Array.isArray(DATA.notes) && DATA.notes.length) text += ' Coverage notes: ' + DATA.notes.join(' ');
+  f.textContent = text;
+})();
+</script>
+</body>
+</html>

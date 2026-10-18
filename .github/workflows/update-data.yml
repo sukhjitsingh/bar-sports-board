@@ -1,0 +1,51 @@
+name: Update schedule data
+
+on:
+  schedule:
+    - cron: '0 15 * * *'   # daily at 15:00 UTC = 8:00 AM Arizona time (no daylight saving). GitHub may start it a few minutes late.
+  workflow_dispatch:        # lets you run it by hand from the Actions tab
+
+permissions:
+  contents: write   # commit data.js back to the repo
+  pages: write      # request a Pages rebuild after the commit
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Fetch latest games from ESPN
+        run: node scripts/update-data.mjs
+
+      - name: Commit changes to main
+        id: commit
+        run: |
+          if [ -n "$(git status --porcelain data.js)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add data.js
+            git commit -m "chore: update schedule data ($(date -u +%FT%H:%MZ))"
+            git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No changes to commit."
+          fi
+
+      # Pushes made with the built-in token may not trigger a Pages rebuild,
+      # so ask for one explicitly. Safe to ignore if it fails.
+      - name: Request Pages rebuild
+        if: steps.commit.outputs.changed == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds"

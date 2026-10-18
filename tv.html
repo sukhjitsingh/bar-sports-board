@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bar TV Sports Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=Barlow:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: a fixed 1920x1080 stage scaled to fit any screen. Header strip, one or two content regions, footer strip.
+   Single dark theme on purpose: this is a room display, not a document. */
+:root{
+  --bg:#080D14; --panel:#101924; --panel-hi:#17232F; --ink:#F5F7FA; --mute:#8DA0B5; --line:#223244;
+  --amber:#FFC53D; --amber-ink:#1B1300; --live:#FF4B3A; --ok:#3DDC84;
+  --nfl:#4F8DFF; --ncaaf:#3DDC6B; --mlb:#FF5A47; --nba:#FF9A2E; --nhl:#2BD0EA; --ncaam:#B58CFF;
+  --disp:"Big Shoulders Display","Oswald","Arial Narrow","Helvetica Neue",Arial,sans-serif;
+  --body:"Barlow","Helvetica Neue",Arial,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);overflow:hidden}
+body{font-family:var(--body);-webkit-text-size-adjust:100%}
+body.idle{cursor:none}
+#vp{position:relative;width:100%;background:var(--bg)}
+#bar{display:none;gap:10px;flex-wrap:wrap;align-items:center;padding:10px 16px;background:#0D1620;border-bottom:1px solid var(--line)}
+body.preview #bar{display:flex}
+/* On the real TV page the picker floats above the footer, appears on any key, tap or mouse move, and hides after a few seconds. */
+body:not(.preview) #bar{display:flex;position:fixed;left:50%;bottom:78px;transform:translateX(-50%);z-index:20;gap:14px;padding:14px 18px;background:#0B121A;border:2px solid var(--line);border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,.6);transition:opacity .25s,visibility .25s}
+body:not(.preview).idle #bar{opacity:0;visibility:hidden;pointer-events:none}
+body:not(.preview) #bar span{font-size:22px}
+body:not(.preview) #bar button{font-size:26px;padding:12px 22px;border-radius:10px}
+body:not(.preview) .pv{display:none}
+#bar span{color:var(--mute);font:600 14px var(--body);margin-right:4px}
+#bar button{font:700 15px var(--body);color:var(--ink);background:var(--panel-hi);border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer}
+#bar button[aria-pressed="true"]{background:var(--amber);color:var(--amber-ink);border-color:var(--amber)}
+#bar button:focus-visible,.pager-hit:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+#stage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0;background:var(--bg);overflow:hidden}
+
+/* header */
+.top{height:112px;padding:0 40px;display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid var(--line)}
+.top h1{margin:0;font:900 70px/0.92 var(--disp);letter-spacing:.5px;text-transform:uppercase}
+.top .sub{margin-top:4px;font:600 26px/1 var(--body);color:var(--mute)}
+.top .sub b{color:var(--ink)}
+.top .sub .lv{color:var(--live)}
+.clock{text-align:right}
+.clock b{display:block;font:900 72px/0.95 var(--disp);font-variant-numeric:tabular-nums}
+.clock span{font:600 22px var(--body);color:var(--mute)}
+
+/* regions */
+#main{position:absolute;left:0;right:0;top:115px;bottom:60px;padding:20px 40px;display:flex;gap:30px}
+.reg{position:relative;min-width:0;height:100%}
+.reg.full{flex:1}
+.reg.cL{flex:0 0 1100px}
+.reg.cR{flex:1}
+.page{height:100%}
+.page.in{animation:fadein .5s ease both}
+@keyframes fadein{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+/* footer */
+.bot{position:absolute;left:0;right:0;bottom:0;height:60px;padding:0 40px;display:flex;align-items:center;justify-content:space-between;border-top:3px solid var(--line);font:600 24px var(--body);color:var(--mute)}
+.pill{display:inline-flex;align-items:center;gap:12px;border-radius:999px;padding:5px 18px;font:700 23px var(--body);background:var(--panel-hi);color:var(--ink)}
+.pill i{width:14px;height:14px;border-radius:50%;background:var(--mute)}
+.pill.ok i{background:var(--ok)}
+.pill.demo{background:var(--amber);color:var(--amber-ink)}
+.dots{display:flex;gap:10px;align-items:center}
+.dots i{width:14px;height:14px;border-radius:50%;background:var(--line)}
+.dots i.on{background:var(--amber)}
+
+/* game card (Today layout and league rows) */
+.g2{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(7,minmax(0,1fr));grid-auto-flow:column;gap:12px 24px;height:100%}
+.g1{display:grid;grid-template-columns:1fr;grid-template-rows:repeat(var(--rows,6),minmax(0,150px));gap:12px;align-content:start;height:100%}
+.card{position:relative;display:grid;grid-template-columns:var(--wc,190px) minmax(0,1fr) var(--cc,210px);align-items:center;gap:22px;padding:0 20px 0 34px;background:var(--panel);border-radius:6px;overflow:hidden;min-height:0}
+.card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:14px;background:var(--c)}
+.card.live{background:linear-gradient(90deg,#34161A,var(--panel) 65%);box-shadow:inset 0 0 0 2px var(--live)}
+.card.final{background:#0C141D}
+.card.nochan{grid-template-columns:var(--wc,190px) minmax(0,1fr)}
+.hero.nochan{grid-template-columns:minmax(0,1fr)}
+.rrow.nochan{grid-template-columns:170px minmax(0,1fr)}
+.when{min-width:0}
+.lgchip{display:block;font:700 21px/24px var(--body);color:var(--c);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lgchip em{font-style:normal;color:var(--mute);font-weight:600}
+.when b{display:block;font:900 56px/58px var(--disp);font-variant-numeric:tabular-nums;white-space:nowrap}
+.when b i{font:700 22px var(--body);font-style:normal;color:var(--mute);margin-left:6px}
+.when b.lv{color:var(--live);font-size:50px}
+.when b.fin{color:var(--mute);font-size:46px}
+.when .sub{display:block;font:600 21px/22px var(--body);color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.when .lvdot{display:inline-block;width:16px;height:16px;border-radius:50%;background:var(--live);margin-right:10px;vertical-align:4px}
+.teams{min-width:0}
+.tm{display:flex;justify-content:space-between;align-items:center;gap:16px}
+.nm{font:800 43px/50px var(--disp);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.sc{font:900 54px/50px var(--disp);font-variant-numeric:tabular-nums}
+.tm.lose .nm,.tm.lose .sc{color:var(--mute)}
+.chan{display:flex;flex-direction:column;align-items:center;justify-content:center;height:78px;padding:0 10px;background:var(--amber);color:var(--amber-ink);border-radius:6px;text-align:center;min-width:0}
+.chan small{font:700 15px/16px var(--body);opacity:.75}
+.chan b{max-width:100%;font:900 42px/44px var(--disp);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chan.long b{font-size:27px;line-height:30px;white-space:normal;max-height:62px}
+.chan.none{background:transparent;border:2px dashed var(--line);color:var(--mute);font:600 22px var(--body)}
+.card.final .chan{background:var(--panel-hi);color:var(--mute)}
+.g1 .card{--wc:260px;--cc:300px;padding-left:44px}
+.g1 .nm{font-size:56px;line-height:64px}.g1 .sc{font-size:70px;line-height:64px}
+.g1 .when b{font-size:76px;line-height:76px}.g1 .when b.lv{font-size:64px}
+.g1 .chan{height:104px}.g1 .chan b{font-size:56px;line-height:58px}.g1 .chan.long b{font-size:34px;line-height:38px}
+
+/* league slide (By league layout) */
+.lg-panel{flex:0 0 560px;display:flex;flex-direction:column;justify-content:space-between;padding:34px 36px;border-radius:6px;background:var(--c);color:#06101A;height:100%}
+.lg-panel h2{margin:0;font:900 250px/0.82 var(--disp);letter-spacing:-2px;text-transform:uppercase}
+.lg-panel h2.mid{font-size:150px}
+.lg-panel h2.sm{font-size:128px}
+.lg-panel .n{font:800 46px/1.05 var(--disp);text-transform:uppercase}
+.lg-panel ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.lg-panel li{font:700 26px/30px var(--body);display:flex;justify-content:space-between;opacity:.55}
+.lg-panel li.on{opacity:1;font-weight:700}
+.lg-wrap{display:flex;gap:30px;height:100%}
+.lg-wrap .g1{flex:1;min-width:0}
+.lg-wrap .g1 .card{--wc:200px;--cc:240px;padding-left:36px}
+.lg-wrap .g1 .nm{font-size:50px;line-height:56px}.lg-wrap .g1 .sc{font-size:62px;line-height:56px}
+.lg-wrap .g1 .when b{font-size:60px;line-height:62px}.lg-wrap .g1 .when b.lv{font-size:50px}
+.lg-wrap .g1 .chan{height:88px}.lg-wrap .g1 .chan b{font-size:46px;line-height:48px}.lg-wrap .g1 .chan.long b{font-size:30px;line-height:34px}
+
+/* split layout */
+.sec{margin:0 0 14px;font:800 40px/1 var(--disp);text-transform:uppercase;letter-spacing:1px;color:var(--mute);display:flex;align-items:center;gap:14px}
+.sec.lvh{color:var(--live)}
+.sec .lvdot{width:20px;height:20px;border-radius:50%;background:var(--live)}
+.heroes{display:grid;grid-template-rows:repeat(3,minmax(0,1fr));gap:18px;height:calc(100% - 54px)}
+.hero{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:26px;align-items:stretch;padding:18px 20px 18px 40px;background:var(--panel);border-radius:6px;overflow:hidden;min-height:0}
+.hero::before{content:"";position:absolute;left:0;top:0;bottom:0;width:16px;background:var(--c)}
+.hero.live{background:linear-gradient(90deg,#34161A,var(--panel) 70%);box-shadow:inset 0 0 0 2px var(--live)}
+.hero .hd{display:flex;gap:18px;align-items:baseline;font:700 26px/28px var(--body);color:var(--mute);margin-bottom:4px}
+.hero .hd .c{color:var(--c)}
+.hero .hd .lv{color:var(--live);font-weight:800}
+.hero .teams{display:flex;flex-direction:column;justify-content:center;flex:1}
+.hero .nm{font-size:78px;line-height:84px}.hero .sc{font-size:104px;line-height:84px}
+.hero .cwrap{display:flex;flex-direction:column;min-width:0}
+.hero .chan{height:100%;min-height:0}
+.hero .chan small{font-size:22px;line-height:26px}
+.hero .chan b{font-size:72px;line-height:76px}.hero .chan.long b{font-size:40px;line-height:44px;max-height:none}
+.hero .big{display:flex;flex-direction:column;min-width:0}
+.rows{display:flex;flex-direction:column;gap:10px;height:calc(100% - 54px)}
+.daysep{height:46px;flex:0 0 46px;display:flex;align-items:center;font:800 30px var(--disp);text-transform:uppercase;letter-spacing:1px;color:var(--amber);border-bottom:2px solid var(--line)}
+.rrow{flex:0 0 88px;display:grid;grid-template-columns:170px minmax(0,1fr) 190px;gap:18px;align-items:center;padding:0 14px 0 28px;background:var(--panel);border-radius:6px;position:relative;overflow:hidden}
+.rrow::before{content:"";position:absolute;left:0;top:0;bottom:0;width:10px;background:var(--c)}
+.rrow .t b{display:block;font:900 44px/44px var(--disp);font-variant-numeric:tabular-nums;white-space:nowrap}
+.rrow .t b i{font:700 18px var(--body);font-style:normal;color:var(--mute);margin-left:4px}
+.rrow .t .lgc{display:block;font:700 18px/20px var(--body);color:var(--c);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rrow .m{min-width:0}
+.rrow .m .nm{font-size:31px;line-height:35px;display:block}
+.rrow .chan{height:60px}.rrow .chan small{display:none}.rrow .chan b{font-size:32px;line-height:34px}.rrow .chan.long b{font-size:21px;line-height:24px}
+
+
+/* empty */
+.empty{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:16px}
+.empty b{font:900 110px/1 var(--disp);text-transform:uppercase}
+.empty span{font:600 36px var(--body);color:var(--mute)}
+
+@media (prefers-reduced-motion:reduce){.page.in{animation:none}}
+</style>
+</head>
+<body>
+<div id="vp">
+  <div id="bar">
+    <span>Layout</span>
+    <button type="button" data-l="today" aria-pressed="false">1 Today, big</button>
+    <button type="button" data-l="league" aria-pressed="false">2 By league</button>
+    <button type="button" data-l="split" aria-pressed="false">3 Live + up next</button>
+    <span class="pv" style="margin-left:14px">Scores</span>
+    <button type="button" id="demoBtn" class="pv" aria-pressed="false">Sample live scores</button>
+  </div>
+  <div id="stage">
+    <header class="top">
+      <div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+      <div class="clock"><b id="clock"></b><span>Arizona time</span></div>
+    </header>
+    <main id="main"></main>
+    <footer class="bot"><div id="status"></div><div class="dots" id="dots"></div><div id="foot-r"></div></footer>
+  </div>
+</div>
+<script src="data.js"></script>
+<script>
+(function(){
+'use strict';
+var PREVIEW = !!window.TV_PREVIEW;
+var TZ = 'America/Phoenix';
+var BASE = 'https://site.api.espn.com/apis/site/v2/sports';
+var LEAGUES = [
+  {k:'NFL',  s:'NFL', n:'NFL',               big:'NFL', cls:'',    c:'var(--nfl)',  path:'football/nfl'},
+  {k:'NCAAF',s:'CFB', n:'College football',  big:'College football', cls:'mid', c:'var(--ncaaf)',path:'football/college-football', groups:80, college:true},
+  {k:'MLB',  s:'MLB', n:'MLB',               big:'MLB', cls:'',    c:'var(--mlb)',  path:'baseball/mlb'},
+  {k:'NBA',  s:'NBA', n:'NBA',               big:'NBA', cls:'',    c:'var(--nba)',  path:'basketball/nba'},
+  {k:'NHL',  s:'NHL', n:'NHL',               big:'NHL', cls:'',    c:'var(--nhl)',  path:'hockey/nhl'},
+  {k:'NCAAM',s:'CBB', n:'College basketball',big:'College basketball', cls:'sm', c:'var(--ncaam)',path:'basketball/mens-college-basketball', groups:50, college:true}
+];
+var LG = {}; LEAGUES.forEach(function(l){ LG[l.k] = l; });
+var LAYOUTS = ['today','league','split'];
+var DATA = window.SPORTS_DATA || {generated:null, games:[]};
+
+/* ---------- time helpers ---------- */
+var fKey   = new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'});
+var fTime  = new Intl.DateTimeFormat('en-US',{timeZone:TZ,hour:'numeric',minute:'2-digit'});
+var fLong  = new Intl.DateTimeFormat('en-US',{timeZone:TZ,weekday:'long',month:'short',day:'numeric'});
+var fWeek  = new Intl.DateTimeFormat('en-US',{timeZone:TZ,weekday:'long'});
+var fStamp = new Intl.DateTimeFormat('en-US',{timeZone:TZ,month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+var key = function(ts){ return fKey.format(new Date(ts)); };
+var esc = function(s){ return String(s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+function timeParts(ts){
+  var s = fTime.format(new Date(ts)), m = s.match(/^(\d+:\d+)\s*(AM|PM)$/i);
+  return m ? [m[1], m[2].toUpperCase()] : [s, ''];
+}
+function shiftDay(k, n){ var p = k.split('-').map(Number); return new Date(Date.UTC(p[0],p[1]-1,p[2]+n)).toISOString().slice(0,10); }
+
+/* ---------- game list = schedule file + live overlay ---------- */
+var norm = function(s){ return String(s).replace(/^#\d+\s+/,'').toLowerCase().replace(/[^a-z0-9]/g,''); };
+var nameKey = function(g){ return g.l+'|'+norm(g.a)+'|'+norm(g.h)+'|'+key(Date.parse(g.t)); };
+var idKey = function(g){ return g.id ? g.l+':'+g.id : null; };
+var pk = function(g){ return idKey(g) || nameKey(g); };
+var overlay = new Map();   // primary key -> latest live fields
+var extras = new Map();    // games the live feed knows about that the schedule file does not
+var G = [];
+function buildList(){
+  var out = [];
+  (DATA.games||[]).forEach(function(x){
+    var g = Object.assign({}, x), o = overlay.get(pk(x)) || overlay.get(nameKey(x));
+    if (o){ g.sa = o.sa; g.sh = o.sh; g.st = o.st; g.c = o.c; if (o.t) g.t = o.t; if (!g.tv && o.tv) g.tv = o.tv; }
+    out.push(g);
+  });
+  extras.forEach(function(g){ out.push(Object.assign({}, g)); });
+  out.forEach(function(g){ g.ts = Date.parse(g.t); g.k = key(g.ts); });
+  out.sort(function(a,b){ return a.ts - b.ts; });
+  return out;
+}
+
+/* ---------- sample live scores for previews ---------- */
+var DEMO_TV = {NFL:['CBS','FOX','NBC','ESPN','ESPN / ABC'], NCAAF:['ABC','ESPN','FOX','CBS','ESPN2'], MLB:['FS1','TBS','FOX','ESPN','MLB Network'], NBA:['TNT','ESPN','ABC','NBA TV'], NHL:['ESPN+','TNT','NHL Network','ABC'], NCAAM:['ESPN','ESPN2','FS1','CBS']};
+var CLOCKS = {NFL:'Q3 4:21',NCAAF:'Q4 9:03',MLB:'Bot 6th',NBA:'Q2 5:40',NHL:'2nd 8:12',NCAAM:'2nd half 12:00'};
+function withDemo(list, day){
+  list = list.map(function(x,i){ var o = DEMO_TV[x.l]; return !x.tv && o ? Object.assign({}, x, {tv:o[i % o.length]}) : x; });
+  var todays = list.filter(function(x){ return x.k === day && !x.tbd; });
+  if (todays.some(function(x){ return x.st === 'live'; })) return list;
+  var fin = Math.floor(todays.length/4), liveN = Math.min(4, Math.max(0, todays.length - fin));
+  var sample = new Map();
+  todays.forEach(function(x,i){
+    if (i < fin) sample.set(x, {st:'final', sa:(i*7+13)%31, sh:(i*5+17)%34, c:''});
+    else if (i < fin + liveN) sample.set(x, {st:'live', sa:(i*3+2)%24, sh:(i*5+7)%27, c:CLOCKS[x.l]||'Live'});
+  });
+  return list.map(function(x){ return sample.has(x) ? Object.assign({}, x, sample.get(x)) : x; });
+}
+
+/* ---------- state ---------- */
+var layout = 'today', demo = PREVIEW, now = Date.now();
+(function(){
+  var h = (location.hash||'').replace('#','').toLowerCase();
+  var q = ''; try { q = (new URLSearchParams(location.search).get('layout')||'').toLowerCase(); } catch(e){}
+  var saved = ''; try { saved = localStorage.getItem('tv-layout')||''; } catch(e){}
+  [h,q,saved].some(function(v){ if (LAYOUTS.indexOf(v) >= 0){ layout = v; return true; } return false; });
+  try { if (new URLSearchParams(location.search).get('demo') === '1') demo = true; } catch(e){}
+})();
+
+function statusOf(x){
+  if (x.st === 'final') return {k:'final'};
+  if (x.st === 'live') return {k:'live', sub:x.c||''};
+  if (x.tbd) return {k:'tbd'};
+  var m = Math.round((x.ts - now)/60000);
+  if (m <= 0) return now - x.ts < 4*3600e3 ? {k:'soon', sub:'Started'} : {k:'pre'};
+  if (m <= 90) return {k:'soon', sub: m < 60 ? 'in '+m+' min' : 'in 1 h '+(m-60)+' min'};
+  return {k:'pre'};
+}
+var rank = function(x){ var k = statusOf(x).k; return k==='live' ? 0 : (k==='soon'||k==='pre'||k==='tbd') ? 1 : 2; };
+function chanHtml(x){
+  if (!x.tv) return '';
+  var t = x.tv.replace(/,\s*/g,' / ');
+  return '<div class="chan'+(t.length > 9 ? ' long' : '')+'"><small>Watch on</small><b>'+esc(t)+'</b></div>';
+}
+function teamsHtml(x){
+  var has = x.st === 'final' || x.st === 'live', fin = x.st === 'final';
+  var aw = fin && x.sa > x.sh, hw = fin && x.sh > x.sa;
+  var row = function(name, sc, lose){ return '<div class="tm'+(lose?' lose':'')+'"><span class="nm">'+esc(name)+'</span>'+(has?'<span class="sc">'+sc+'</span>':'')+'</div>'; };
+  return '<div class="teams">'+row(x.a, x.sa, fin && !aw && x.sa !== x.sh)+row(x.h, x.sh, fin && !hw && x.sa !== x.sh)+'</div>';
+}
+function chipHtml(x){
+  var l = LG[x.l] || {s:x.l};
+  return '<span class="lgchip">'+esc(l.s)+(x.tag?' <em>'+esc(x.tag)+'</em>':'')+'</span>';
+}
+function whenHtml(x){
+  var st = statusOf(x), p = timeParts(x.ts), main = '', sub = '';
+  if (st.k === 'live'){ main = '<b class="lv">LIVE</b>'; sub = st.sub; }
+  else if (st.k === 'final'){ main = '<b class="fin">FINAL</b>'; }
+  else if (st.k === 'tbd'){ main = '<b>TBD</b>'; }
+  else { main = '<b>'+p[0]+'<i>'+p[1]+'</i></b>'; sub = st.sub || ''; }
+  return '<div class="when">'+chipHtml(x)+main+(sub?'<span class="sub">'+esc(sub)+'</span>':'')+'</div>';
+}
+function cardHtml(x){
+  var st = statusOf(x).k;
+  return '<article class="card '+(st==='live'?'live':st==='final'?'final':'')+(x.tv?'':' nochan')+'" style="--c:'+(LG[x.l]||LEAGUES[0]).c+'">'+whenHtml(x)+teamsHtml(x)+chanHtml(x)+'</article>';
+}
+function heroHtml(x){
+  var st = statusOf(x), l = LG[x.l] || LEAGUES[0];
+  var hd = '<div class="hd"><span class="c">'+esc(l.n)+(x.tag?' '+esc(x.tag):'')+'</span>';
+  if (st.k === 'live') hd += '<span class="lv"><span class="lvdot" style="display:inline-block;width:16px;height:16px;border-radius:50%;background:var(--live);margin-right:8px"></span>LIVE '+esc(st.sub||'')+'</span>';
+  else { var p = timeParts(x.ts); hd += '<span>'+(x.tbd?'Time TBD':p[0]+' '+p[1])+'</span>'+(st.sub?'<span>'+esc(st.sub)+'</span>':''); }
+  hd += '</div>';
+  return '<article class="hero '+(st.k==='live'?'live':'')+(x.tv?'':' nochan')+'" style="--c:'+l.c+'"><div class="big">'+hd+teamsHtml(x)+'</div>'+chanHtml(x)+'</article>';
+}
+function rowHtml(x){
+  var l = LG[x.l] || LEAGUES[0], p = timeParts(x.ts);
+  var t = x.tbd ? 'TBD' : p[0]+'<i>'+p[1]+'</i>';
+  return '<div class="rrow'+(x.tv?'':' nochan')+'" style="--c:'+l.c+'"><div class="t"><b>'+t+'</b><span class="lgc">'+esc(l.s)+(x.tag?' '+esc(x.tag):'')+'</span></div><div class="m"><span class="nm">'+esc(x.a)+'</span><span class="nm">'+esc(x.h)+'</span></div>'+chanHtml(x)+'</div>';
+}
+function chunk(a, n){ var o = []; for (var i = 0; i < a.length; i += n) o.push(a.slice(i, i+n)); return o; }
+
+/* ---------- pagers (each region rotates by itself) ---------- */
+function Pager(el){ this.el = el; this.pages = []; this.i = 0; this.t0 = Date.now(); this.dwell = 12000; this.shown = null; }
+Pager.prototype.set = function(pages, dwell){
+  this.dwell = dwell; this.pages = pages.length ? pages : [''];
+  if (this.i >= this.pages.length) this.i = 0;
+  this.show(false);
+};
+Pager.prototype.show = function(animate){
+  var h = this.pages[this.i];
+  if (h === this.shown) return;
+  this.shown = h;
+  this.el.innerHTML = '<div class="page'+(animate?' in':'')+'">'+h+'</div>';
+  if (this === pagers[0]) renderDots();
+};
+Pager.prototype.tick = function(t){
+  if (this.pages.length > 1 && t - this.t0 >= this.dwell){
+    this.i = (this.i + 1) % this.pages.length; this.t0 = t; this.show(true);
+    if (this === pagers[0]) renderDots();
+  }
+};
+Pager.prototype.go = function(d){
+  if (this.pages.length < 2) return;
+  this.i = (this.i + d + this.pages.length) % this.pages.length; this.t0 = Date.now(); this.shown = null; this.show(true); renderDots();
+};
+var pagers = [];
+function renderDots(){
+  var p = pagers[0], el = document.getElementById('dots');
+  if (!p || p.pages.length < 2){ el.innerHTML = ''; return; }
+  el.innerHTML = p.pages.map(function(_,i){ return '<i class="'+(i===p.i?'on':'')+'"></i>'; }).join('');
+}
+
+/* ---------- layouts ---------- */
+function pickDay(){
+  var today = key(now);
+  if (G.some(function(x){ return x.k === today; })) return today;
+  var days = Array.from(new Set(G.map(function(x){ return x.k; }))).sort();
+  return days.find(function(d){ return d > today; }) || days[days.length-1] || today;
+}
+function dayTitle(d){
+  var today = key(now), ts = Date.parse(d+'T12:00:00-07:00');
+  if (d === today) return fLong.format(ts);
+  if (d === shiftDay(today,1)) return 'Tomorrow, '+fLong.format(ts);
+  return fLong.format(ts);
+}
+function emptyPage(day){
+  var next = G.find(function(x){ return x.ts > now; });
+  var msg = next ? 'Next game: '+fLong.format(next.ts)+', '+timeParts(next.ts).join(' ')+' ('+(LG[next.l]||{n:next.l}).n+')' : 'The schedule file has no upcoming games.';
+  return '<div class="empty"><b>No games listed</b><span>'+esc(msg)+'</span></div>';
+}
+
+function layoutToday(list, day){
+  var games = list.filter(function(x){ return x.k === day; });
+  games.sort(function(a,b){ return rank(a) - rank(b) || a.ts - b.ts; });
+  if (!games.length) return [{pages:[emptyPage(day)], dwell:15000}];
+  var pages = chunk(games, 14).map(function(g){
+    if (g.length <= 6) return '<div class="g1" style="--rows:6">'+g.map(cardHtml).join('')+'</div>';
+    return '<div class="g2">'+g.map(cardHtml).join('')+'</div>';
+  });
+  return [{pages:pages, dwell:14000}];
+}
+function layoutLeague(list, day){
+  var pages = [], present = LEAGUES.filter(function(l){ return list.some(function(x){ return x.k === day && x.l === l.k; }); });
+  present.forEach(function(l){
+    var g = list.filter(function(x){ return x.k === day && x.l === l.k; });
+    g.sort(function(a,b){ return rank(a) - rank(b) || a.ts - b.ts; });
+    var live = g.filter(function(x){ return x.st === 'live'; }).length;
+    var side = present.map(function(o){
+      var c = list.filter(function(x){ return x.k === day && x.l === o.k; }).length;
+      return '<li'+(o.k===l.k?' class="on"':'')+'><span>'+esc(o.n)+'</span><span>'+c+'</span></li>';
+    }).join('');
+    chunk(g, 7).forEach(function(part, pi, all){
+      pages.push('<div class="lg-wrap"><aside class="lg-panel" style="--c:'+l.c+'"><div><h2 class="'+l.cls+'">'+esc(l.big)+'</h2></div>'+
+        '<div class="n">'+g.length+(g.length===1?' game':' games')+(live?', '+live+' live':'')+(all.length>1?' (page '+(pi+1)+' of '+all.length+')':'')+'</div>'+
+        '<ul>'+side+'</ul></aside><div class="g1" style="--rows:7">'+part.map(cardHtml).join('')+'</div></div>');
+    });
+  });
+  if (!pages.length) pages = [emptyPage(day)];
+  return [{pages:pages, dwell:13000}];
+}
+function layoutSplit(list, day){
+  var live = list.filter(function(x){ return x.st === 'live'; });
+  var upcoming = list.filter(function(x){ return x.st !== 'live' && x.st !== 'final' && !x.tbd && x.ts > now - 30*60e3; });
+  var left, leftTitle, used = [];
+  if (live.length){
+    left = chunk(live, 3).map(function(g){ return '<div class="sec lvh"><span class="lvdot"></span>On now</div><div class="heroes">'+g.map(heroHtml).join('')+'</div>'; });
+  } else {
+    used = upcoming.slice(0,3);
+    left = [used.length
+      ? '<div class="sec">Starting next</div><div class="heroes">'+used.map(heroHtml).join('')+'</div>'
+      : emptyPage(day)];
+  }
+  var rest = upcoming.filter(function(x){ return used.indexOf(x) < 0; });
+  var items = [], lastDay = null, today = key(now);
+  rest.forEach(function(x){
+    if (x.k !== lastDay){ items.push({sep:x.k === today ? 'Later today' : dayTitle(x.k)}); lastDay = x.k; }
+    items.push({g:x});
+  });
+  var pages = [], cur = [], h = 0, CAP = 820, lastSep = null;
+  items.forEach(function(it){
+    var ih = (it.sep ? 46 : 88) + 10;
+    if (h + ih > CAP){
+      pages.push(cur); cur = []; h = 0;
+      if (!it.sep && lastSep){ cur.push({sep:lastSep+' (cont.)'}); h += 56; }
+    }
+    cur.push(it); h += ih;
+    if (it.sep) lastSep = it.sep;
+  });
+  if (cur.length) pages.push(cur);
+  var rightPages = pages.map(function(p){
+    return '<div class="sec">Up next</div><div class="rows">'+p.map(function(it){ return it.sep ? '<div class="daysep">'+esc(it.sep)+'</div>' : rowHtml(it.g); }).join('')+'</div>';
+  });
+  if (!rightPages.length) rightPages = ['<div class="sec">Up next</div><div class="empty"><span>Nothing else on the schedule yet.</span></div>'];
+  return [{pages:left, dwell:10000, cls:'cL'}, {pages:rightPages, dwell:10000, cls:'cR'}];
+}
+
+/* ---------- render ---------- */
+var mainEl = document.getElementById('main'), builtFor = null;
+function ensureRegions(specs){
+  var sig = layout+':'+specs.length;
+  if (builtFor === sig) return;
+  builtFor = sig;
+  mainEl.innerHTML = specs.map(function(s,i){ return '<section class="reg '+(s.cls||'full')+'" id="r'+i+'"></section>'; }).join('');
+  pagers = specs.map(function(_,i){ return new Pager(document.getElementById('r'+i)); });
+}
+function refresh(){
+  now = Date.now();
+  G = buildList();
+  var day = pickDay();
+  var list = demo ? withDemo(G, day) : G;
+  var specs = layout === 'league' ? layoutLeague(list, day) : layout === 'split' ? layoutSplit(list, day) : layoutToday(list, day);
+  ensureRegions(specs);
+  specs.forEach(function(s,i){ pagers[i].set(s.pages, s.dwell); });
+
+  var dayGames = list.filter(function(x){ return x.k === day; });
+  var nLive = dayGames.filter(function(x){ return x.st === 'live'; }).length;
+  var nFin = dayGames.filter(function(x){ return x.st === 'final'; }).length;
+  document.getElementById('title').textContent = layout === 'split' ? 'Bar sports board' : dayTitle(day);
+  document.getElementById('subtitle').innerHTML = layout === 'split'
+    ? '<b>'+nLive+'</b> live now &nbsp;|&nbsp; <b>'+dayGames.length+'</b> games '+(day===key(now)?'today':esc(dayTitle(day)))
+    : '<b>'+dayGames.length+'</b> '+(dayGames.length===1?'game':'games')+(nLive?' &nbsp;|&nbsp; <span class="lv">'+nLive+' live</span>':'')+(nFin?' &nbsp;|&nbsp; '+nFin+' final':'');
+  renderStatus();
+  Array.prototype.forEach.call(document.querySelectorAll('#bar button[data-l]'), function(b){ b.setAttribute('aria-pressed', String(b.dataset.l === layout)); });
+  document.getElementById('demoBtn').setAttribute('aria-pressed', String(demo));
+}
+var feed = {lastOk:0, tried:false, delay:300000};
+function renderStatus(){
+  var el = document.getElementById('status'), r = document.getElementById('foot-r');
+  var gen = DATA.generated ? fStamp.format(new Date(DATA.generated)) : 'unknown';
+  if (demo) el.innerHTML = '<span class="pill demo"><i></i>Sample scores and channels, not real</span>';
+  else if (feed.lastOk && now - feed.lastOk < feed.delay*2.5) el.innerHTML = '<span class="pill ok"><i></i>Live scores, updated '+fTime.format(new Date(feed.lastOk))+'</span>';
+  else el.innerHTML = '<span class="pill"><i></i>Schedule as of '+esc(gen)+', scores may be behind</span>';
+  r.textContent = PREVIEW ? 'Preview: the live feed runs on the GitHub Pages page' : 'All times Arizona';
+}
+
+/* ---------- live feed (ESPN public scoreboard) ---------- */
+function parseEvent(league, ev){
+  var comp = ev && ev.competitions && ev.competitions[0];
+  if (!comp || !Array.isArray(comp.competitors)) return null;
+  var home = comp.competitors.find(function(c){ return c.homeAway === 'home'; });
+  var away = comp.competitors.find(function(c){ return c.homeAway === 'away'; });
+  if (!home || !home.team || !away || !away.team) return null;
+  var statusName = (ev.status && ev.status.type && ev.status.type.name) || (comp.status && comp.status.type && comp.status.type.name) || '';
+  if (/CANCEL/i.test(statusName)) return null;
+  var t = new Date(ev.date); if (isNaN(t.getTime())) return null;
+  var label = function(c){
+    var name = league.college ? (c.team.location || c.team.shortDisplayName || c.team.displayName) : c.team.displayName;
+    var rk = c.curatedRank && c.curatedRank.current;
+    return league.college && rk && rk <= 25 ? '#'+rk+' '+name : name;
+  };
+  var g = {l:league.k, a:label(away), h:label(home), t:t.toISOString().replace(/\.\d{3}Z$/,'Z')};
+  if (ev.id) g.id = String(ev.id);
+  var state = (ev.status && ev.status.type && ev.status.type.state) || (comp.status && comp.status.type && comp.status.type.state);
+  var sa = parseInt(away.score,10), sh = parseInt(home.score,10);
+  if (state === 'post' && !isNaN(sa) && !isNaN(sh)){ g.sa = sa; g.sh = sh; g.st = 'final'; }
+  else if (state === 'in' && !isNaN(sa) && !isNaN(sh)){
+    g.sa = sa; g.sh = sh; g.st = 'live';
+    var d = ev.status.type.shortDetail || ev.status.type.detail; if (d) g.c = d;
+  }
+  if (/POSTPONED/i.test(statusName)) g.tag = 'Postponed';
+  else if (comp.notes && comp.notes[0] && comp.notes[0].headline) g.tag = String(comp.notes[0].headline);
+  var names = [];
+  if (Array.isArray(comp.broadcasts)){
+    var nat = comp.broadcasts.filter(function(b){ return b.market === 'national' || (b.market && b.market.type === 'National'); });
+    names = [].concat.apply([], (nat.length ? nat : comp.broadcasts).map(function(b){ return b.names || []; }));
+  }
+  if (!names.length && typeof comp.broadcast === 'string' && comp.broadcast) names = [comp.broadcast];
+  names = Array.from(new Set(names)).slice(0,3);
+  if (names.length) g.tv = names.join(', ');
+  return g;
+}
+function fetchFeed(l, day){
+  var url = BASE+'/'+l.path+'/scoreboard?dates='+day+(l.groups?'&groups='+l.groups:'')+'&limit=400';
+  var ctl = typeof AbortController === 'function' ? new AbortController() : null;
+  var to = setTimeout(function(){ if (ctl) ctl.abort(); }, 10000);
+  return fetch(url, {cache:'no-store', signal: ctl ? ctl.signal : undefined}).then(function(r){
+    clearTimeout(to);
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    return r.json();
+  }).then(function(j){
+    if (!Array.isArray(j.events)) throw new Error('unexpected response');
+    return j.events.map(function(ev){ return parseEvent(l, ev); }).filter(Boolean);
+  });
+}
+function applyFeed(games){
+  var baseIdx = new Map();
+  (DATA.games||[]).forEach(function(x){ var p = pk(x); if (idKey(x)) baseIdx.set(idKey(x), p); baseIdx.set(nameKey(x), p); });
+  games.forEach(function(fg){
+    var p = (idKey(fg) && baseIdx.get(idKey(fg))) || baseIdx.get(nameKey(fg));
+    if (p) overlay.set(p, {sa:fg.sa, sh:fg.sh, st:fg.st, c:fg.c, t:fg.t, tv:fg.tv});
+    else extras.set(pk(fg), fg);
+  });
+}
+function anyActive(){
+  return G.some(function(x){ return x.st === 'live' || (x.st !== 'final' && x.ts - now < 30*60e3 && now - x.ts < 4*3600e3); });
+}
+function poll(){
+  now = Date.now();
+  var days = [key(now).replace(/-/g,'')];
+  var hourAZ = parseInt(new Intl.DateTimeFormat('en-US',{timeZone:TZ,hour:'numeric',hour12:false}).format(new Date(now)),10);
+  if (hourAZ < 6) days.push(shiftDay(key(now),-1).replace(/-/g,''));
+  var jobs = [];
+  LEAGUES.forEach(function(l){ days.forEach(function(d){ jobs.push(fetchFeed(l,d).then(function(g){ applyFeed(g); return true; }, function(){ return false; })); }); });
+  Promise.all(jobs).then(function(res){
+    feed.tried = true;
+    if (res.some(Boolean)) feed.lastOk = Date.now();
+    feed.delay = anyActive() ? 60000 : 300000;
+    refresh();
+    setTimeout(poll, feed.delay);
+  });
+}
+
+/* ---------- reload the schedule file now and then (GitHub Pages) ---------- */
+function reloadData(){
+  fetch('data.js?t='+Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.text() : ''; }).then(function(t){
+    var m = t.match(/=\s*(\{[\s\S]*\})\s*;?\s*$/);
+    if (!m) return;
+    var d = JSON.parse(m[1]);
+    if (d && Array.isArray(d.games) && d.generated !== DATA.generated){ DATA = d; refresh(); }
+  }).catch(function(){});
+}
+
+/* ---------- screen fitting, input ---------- */
+var vp = document.getElementById('vp'), stage = document.getElementById('stage'), bar = document.getElementById('bar');
+function fit(){
+  var b = PREVIEW ? bar.offsetHeight : 0, w = innerWidth - 32;
+  var h = innerHeight - b; if (h < 150) h = w*9/16;
+  var s = Math.min(w/1920, h/1080);
+  vp.style.height = (b + h)+'px';
+  stage.style.transform = 'scale('+s+')';
+  stage.style.left = Math.max(0,(innerWidth - 1920*s)/2)+'px';
+  stage.style.top = (b + (innerWidth >= innerHeight ? Math.max(0,(h - 1080*s)/2) : 12))+'px';
+}
+function setLayout(l){
+  if (LAYOUTS.indexOf(l) < 0) return;
+  layout = l; builtFor = null;
+  try { localStorage.setItem('tv-layout', l); } catch(e){}
+  try { history.replaceState(null,'','#'+l); } catch(e){}
+  refresh();
+}
+function tickClock(){
+  now = Date.now();
+  document.getElementById('clock').textContent = fTime.format(new Date(now));
+  pagers.forEach(function(p){ p.tick(now); });
+}
+if (PREVIEW) document.body.classList.add('preview');
+Array.prototype.forEach.call(document.querySelectorAll('#bar button[data-l]'), function(b){ b.addEventListener('click', function(){ setLayout(b.dataset.l); }); });
+document.getElementById('demoBtn').addEventListener('click', function(){ demo = !demo; refresh(); });
+document.addEventListener('keydown', function(e){
+  if (e.key === '1') setLayout('today');
+  else if (e.key === '2') setLayout('league');
+  else if (e.key === '3') setLayout('split');
+  else if (e.key === 'd' || e.key === 'D'){ demo = !demo; refresh(); }
+  else if (e.key === 'ArrowRight' && pagers[0]) pagers.forEach(function(p){ p.go(1); });
+  else if (e.key === 'ArrowLeft' && pagers[0]) pagers.forEach(function(p){ p.go(-1); });
+  else if ((e.key === 'f' || e.key === 'F') && document.documentElement.requestFullscreen){ document.documentElement.requestFullscreen().catch(function(){}); }
+});
+var idleT;
+function wake(){ document.body.classList.remove('idle'); clearTimeout(idleT); idleT = setTimeout(function(){ document.body.classList.add('idle'); }, 6000); }
+['mousemove','mousedown','touchstart','keydown'].forEach(function(ev){ document.addEventListener(ev, wake, {passive:true}); }); wake();
+window.addEventListener('resize', fit);
+
+fit(); refresh();
+setInterval(tickClock, 1000); tickClock();
+setInterval(refresh, 20000);
+if (!PREVIEW){
+  poll();
+  setInterval(reloadData, 15*60*1000);
+  setTimeout(function(){ location.reload(); }, 6*3600*1000);
+  try { if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(function(){}); } catch(e){}
+  document.addEventListener('visibilitychange', function(){ try { if (!document.hidden && navigator.wakeLock) navigator.wakeLock.request('screen').catch(function(){}); } catch(e){} });
+}
+window.__tv = {parseEvent: parseEvent, applyFeed: applyFeed, refresh: refresh, setLayout: setLayout, state: function(){ return {layout:layout, demo:demo, G:G}; }};
+})();
+</script>
+</body>
+</html>
