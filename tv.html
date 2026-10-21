@@ -31,6 +31,12 @@ body:not(.preview).idle #bar{opacity:0;visibility:hidden;pointer-events:none}
 body:not(.preview) #bar span{font-size:22px}
 body:not(.preview) #bar button{font-size:26px;padding:12px 22px;border-radius:10px}
 body:not(.preview) .pv{display:none}
+#bar #pauseBtn[aria-pressed="true"]{background:var(--live);color:#fff;border-color:var(--live)}
+#bar button:disabled{opacity:.4;cursor:default}
+body:not(.preview) #bar{gap:12px;flex-wrap:nowrap;width:max-content;max-width:96vw;white-space:nowrap}
+body:not(.preview) #bar button{font-size:24px;padding:12px 18px}
+.pill.paused{background:var(--live);color:#fff}
+.pill.paused i{background:#fff}
 #bar span{color:var(--mute);font:600 14px var(--body);margin-right:4px}
 #bar button{font:700 15px var(--body);color:var(--ink);background:var(--panel-hi);border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer}
 #bar button[aria-pressed="true"]{background:var(--amber);color:var(--amber-ink);border-color:var(--amber)}
@@ -159,7 +165,11 @@ body:not(.preview) .pv{display:none}
 <body>
 <div id="vp">
   <div id="bar">
-    <span>Layout</span>
+    <span>Slides</span>
+    <button type="button" id="prevBtn" aria-label="Previous slide">&#9664; Prev</button>
+    <button type="button" id="pauseBtn" aria-pressed="false" aria-label="Pause slides">&#10074;&#10074; Pause</button>
+    <button type="button" id="nextBtn" aria-label="Next slide">Next &#9654;</button>
+    <span style="margin-left:14px">Layout</span>
     <button type="button" data-l="today" aria-pressed="false">1 Today, big</button>
     <button type="button" data-l="league" aria-pressed="false">2 By league</button>
     <button type="button" data-l="split" aria-pressed="false">3 Live + up next</button>
@@ -246,7 +256,7 @@ function withDemo(list, day){
 }
 
 /* ---------- state ---------- */
-var layout = 'today', demo = PREVIEW, now = Date.now();
+var layout = 'today', demo = PREVIEW, now = Date.now(), paused = false;
 (function(){
   var h = (location.hash||'').replace('#','').toLowerCase();
   var q = ''; try { q = (new URLSearchParams(location.search).get('layout')||'').toLowerCase(); } catch(e){}
@@ -322,6 +332,7 @@ Pager.prototype.show = function(animate){
   if (this === pagers[0]) renderDots();
 };
 Pager.prototype.tick = function(t){
+  if (paused){ this.t0 = t; return; }   // restart the full dwell time after resume
   if (this.pages.length > 1 && t - this.t0 >= this.dwell){
     this.i = (this.i + 1) % this.pages.length; this.t0 = t; this.show(true);
     if (this === pagers[0]) renderDots();
@@ -447,7 +458,7 @@ function refresh(){
   document.getElementById('subtitle').innerHTML = layout === 'split'
     ? '<b>'+nLive+'</b> live now &nbsp;|&nbsp; <b>'+dayGames.length+'</b> games '+(day===key(now)?'today':esc(dayTitle(day)))
     : '<b>'+dayGames.length+'</b> '+(dayGames.length===1?'game':'games')+(nLive?' &nbsp;|&nbsp; <span class="lv">'+nLive+' live</span>':'')+(nFin?' &nbsp;|&nbsp; '+nFin+' final':'');
-  renderStatus();
+  syncControls();
   Array.prototype.forEach.call(document.querySelectorAll('#bar button[data-l]'), function(b){ b.setAttribute('aria-pressed', String(b.dataset.l === layout)); });
   document.getElementById('demoBtn').setAttribute('aria-pressed', String(demo));
 }
@@ -459,7 +470,20 @@ function renderStatus(){
   else if (feed.lastOk && now - feed.lastOk < feed.delay*2.5) el.innerHTML = '<span class="pill ok"><i></i>Live scores, updated '+fTime.format(new Date(feed.lastOk))+'</span>';
   else el.innerHTML = '<span class="pill"><i></i>Schedule as of '+esc(gen)+', scores may be behind</span>';
   r.textContent = PREVIEW ? 'Preview: the live feed runs on the GitHub Pages page' : 'All times Arizona';
+  if (paused) el.innerHTML = '<span class="pill paused"><i></i>Paused, slides are not rotating</span>';
 }
+function syncControls(){
+  var multi = pagers.some(function(p){ return p.pages.length > 1; });
+  var pb = document.getElementById('pauseBtn');
+  pb.setAttribute('aria-pressed', String(paused));
+  pb.setAttribute('aria-label', paused ? 'Resume slides' : 'Pause slides');
+  pb.innerHTML = paused ? '&#9654; Play' : '&#10074;&#10074; Pause';
+  document.getElementById('prevBtn').disabled = !multi;
+  document.getElementById('nextBtn').disabled = !multi;
+  renderStatus();
+}
+function setPaused(v){ paused = v; pagers.forEach(function(p){ p.t0 = Date.now(); }); syncControls(); wake(); }
+function step(d){ pagers.forEach(function(p){ p.go(d); }); syncControls(); wake(); }
 
 /* ---------- live feed (ESPN public scoreboard) ---------- */
 function parseEvent(league, ev){
@@ -573,14 +597,18 @@ function tickClock(){
 }
 if (PREVIEW) document.body.classList.add('preview');
 Array.prototype.forEach.call(document.querySelectorAll('#bar button[data-l]'), function(b){ b.addEventListener('click', function(){ setLayout(b.dataset.l); }); });
+document.getElementById('pauseBtn').addEventListener('click', function(){ setPaused(!paused); });
+document.getElementById('prevBtn').addEventListener('click', function(){ step(-1); });
+document.getElementById('nextBtn').addEventListener('click', function(){ step(1); });
 document.getElementById('demoBtn').addEventListener('click', function(){ demo = !demo; refresh(); });
 document.addEventListener('keydown', function(e){
   if (e.key === '1') setLayout('today');
   else if (e.key === '2') setLayout('league');
   else if (e.key === '3') setLayout('split');
   else if (e.key === 'd' || e.key === 'D'){ demo = !demo; refresh(); }
-  else if (e.key === 'ArrowRight' && pagers[0]) pagers.forEach(function(p){ p.go(1); });
-  else if (e.key === 'ArrowLeft' && pagers[0]) pagers.forEach(function(p){ p.go(-1); });
+  else if (e.key === 'ArrowRight' || e.key === 'PageDown') step(1);
+  else if (e.key === 'ArrowLeft' || e.key === 'PageUp') step(-1);
+  else if ((e.key === ' ' || e.key === 'p' || e.key === 'P' || e.key === 'MediaPlayPause') && document.activeElement.tagName !== 'BUTTON'){ e.preventDefault(); setPaused(!paused); }
   else if ((e.key === 'f' || e.key === 'F') && document.documentElement.requestFullscreen){ document.documentElement.requestFullscreen().catch(function(){}); }
 });
 var idleT;
