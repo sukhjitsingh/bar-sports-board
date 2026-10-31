@@ -23,24 +23,18 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);overflow:hi
 body{font-family:var(--body);-webkit-text-size-adjust:100%}
 body.idle{cursor:none}
 #vp{position:relative;width:100%;background:var(--bg)}
-#bar{display:none;gap:10px;flex-wrap:wrap;align-items:center;padding:10px 16px;background:#0D1620;border-bottom:1px solid var(--line)}
-body.preview #bar{display:flex}
-/* On the real TV page the picker floats above the footer, appears on any key, tap or mouse move, and hides after a few seconds. */
-body:not(.preview) #bar{display:flex;position:fixed;left:50%;bottom:78px;transform:translateX(-50%);z-index:20;gap:14px;padding:14px 18px;background:#0B121A;border:2px solid var(--line);border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,.6);transition:opacity .25s,visibility .25s}
-body:not(.preview).idle #bar{opacity:0;visibility:hidden;pointer-events:none}
-body:not(.preview) #bar span{font-size:22px}
-body:not(.preview) #bar button{font-size:26px;padding:12px 22px;border-radius:10px}
-body:not(.preview) .pv{display:none}
+/* Control strip: sits inside the 1920x1080 stage, in the footer slot, so it never covers the schedule and scales with the screen. */
+#bar{position:absolute;left:0;right:0;bottom:0;height:60px;z-index:20;display:flex;align-items:center;justify-content:center;gap:14px;padding:0 40px;background:var(--bg);border-top:3px solid var(--line);white-space:nowrap;overflow:hidden;transition:opacity .2s,visibility 0s}   /* visible at once so it can take focus */
+body:not(.preview).idle #bar{opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s,visibility 0s linear .2s}
+#bar span{color:var(--mute);font:600 22px var(--body);margin:0 4px 0 6px}
+#bar button{font:700 24px/29px var(--body);color:var(--ink);background:var(--panel-hi);border:2px solid var(--line);border-radius:10px;padding:5px 18px;cursor:pointer;flex:0 0 auto}
+#bar button[aria-pressed="true"]{background:var(--amber);color:var(--amber-ink);border-color:var(--amber)}
 #bar #pauseBtn[aria-pressed="true"]{background:var(--live);color:#fff;border-color:var(--live)}
-#bar button:disabled{opacity:.4;cursor:default}
-body:not(.preview) #bar{gap:12px;flex-wrap:nowrap;width:max-content;max-width:96vw;white-space:nowrap}
-body:not(.preview) #bar button{font-size:24px;padding:12px 18px}
+#bar button:disabled{opacity:.35;cursor:default}
+#bar button:focus{outline:4px solid #fff;outline-offset:2px}
+body:not(.preview) .pv{display:none}
 .pill.paused{background:var(--live);color:#fff}
 .pill.paused i{background:#fff}
-#bar span{color:var(--mute);font:600 14px var(--body);margin-right:4px}
-#bar button{font:700 15px var(--body);color:var(--ink);background:var(--panel-hi);border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer}
-#bar button[aria-pressed="true"]{background:var(--amber);color:var(--amber-ink);border-color:var(--amber)}
-#bar button:focus-visible,.pager-hit:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
 #stage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0;background:var(--bg);overflow:hidden}
 
 /* header */
@@ -164,7 +158,14 @@ body:not(.preview) #bar button{font-size:24px;padding:12px 18px}
 </head>
 <body>
 <div id="vp">
-  <div id="bar">
+  <div id="stage">
+    <header class="top">
+      <div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+      <div class="clock"><b id="clock"></b><span>Arizona time</span></div>
+    </header>
+    <main id="main"></main>
+    <footer class="bot"><div id="status"></div><div class="dots" id="dots"></div><div id="foot-r"></div></footer>
+  <div id="bar" role="toolbar" aria-label="Slide and layout controls">
     <span>Slides</span>
     <button type="button" id="prevBtn" aria-label="Previous slide">&#9664; Prev</button>
     <button type="button" id="pauseBtn" aria-pressed="false" aria-label="Pause slides">&#10074;&#10074; Pause</button>
@@ -176,13 +177,6 @@ body:not(.preview) #bar button{font-size:24px;padding:12px 18px}
     <span class="pv" style="margin-left:14px">Scores</span>
     <button type="button" id="demoBtn" class="pv" aria-pressed="false">Sample live scores</button>
   </div>
-  <div id="stage">
-    <header class="top">
-      <div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
-      <div class="clock"><b id="clock"></b><span>Arizona time</span></div>
-    </header>
-    <main id="main"></main>
-    <footer class="bot"><div id="status"></div><div class="dots" id="dots"></div><div id="foot-r"></div></footer>
   </div>
 </div>
 <script src="data.js"></script>
@@ -480,10 +474,12 @@ function syncControls(){
   pb.innerHTML = paused ? '&#9654; Play' : '&#10074;&#10074; Pause';
   document.getElementById('prevBtn').disabled = !multi;
   document.getElementById('nextBtn').disabled = !multi;
+  var a = document.activeElement;
+  if (a && a.tagName === 'BUTTON' && a.disabled && bar.contains(a)) focusBar();
   renderStatus();
 }
-function setPaused(v){ paused = v; pagers.forEach(function(p){ p.t0 = Date.now(); }); syncControls(); wake(); }
-function step(d){ pagers.forEach(function(p){ p.go(d); }); syncControls(); wake(); }
+function setPaused(v){ paused = v; pagers.forEach(function(p){ p.t0 = Date.now(); }); syncControls(); }
+function step(d){ pagers.forEach(function(p){ p.go(d); }); syncControls(); }
 
 /* ---------- live feed (ESPN public scoreboard) ---------- */
 function parseEvent(league, ev){
@@ -556,6 +552,7 @@ function poll(){
   Promise.all(jobs).then(function(res){
     feed.tried = true;
     if (res.some(Boolean)) feed.lastOk = Date.now();
+    now = Date.now(); G = buildList();   // include the scores just fetched before deciding how soon to poll again
     feed.delay = anyActive() ? 60000 : 300000;
     refresh();
     setTimeout(poll, feed.delay);
@@ -575,13 +572,13 @@ function reloadData(){
 /* ---------- screen fitting, input ---------- */
 var vp = document.getElementById('vp'), stage = document.getElementById('stage'), bar = document.getElementById('bar');
 function fit(){
-  var b = PREVIEW ? bar.offsetHeight : 0, w = innerWidth - 32;
-  var h = innerHeight - b; if (h < 150) h = w*9/16;
+  var w = PREVIEW ? innerWidth - 32 : innerWidth;
+  var h = innerHeight; if (h < 150) h = w*9/16;
   var s = Math.min(w/1920, h/1080);
-  vp.style.height = (b + h)+'px';
+  vp.style.height = h+'px';
   stage.style.transform = 'scale('+s+')';
   stage.style.left = Math.max(0,(innerWidth - 1920*s)/2)+'px';
-  stage.style.top = (b + (innerWidth >= innerHeight ? Math.max(0,(h - 1080*s)/2) : 12))+'px';
+  stage.style.top = Math.max(0,(h - 1080*s)/2)+'px';
 }
 function setLayout(l){
   if (LAYOUTS.indexOf(l) < 0) return;
@@ -601,19 +598,80 @@ document.getElementById('pauseBtn').addEventListener('click', function(){ setPau
 document.getElementById('prevBtn').addEventListener('click', function(){ step(-1); });
 document.getElementById('nextBtn').addEventListener('click', function(){ step(1); });
 document.getElementById('demoBtn').addEventListener('click', function(){ demo = !demo; refresh(); });
+/* ---------- remote / keyboard ----------
+   Fire TV remote: d-pad = arrow keys, Select = Enter, Menu = ContextMenu, media keys.
+   With the controls hidden: Left/Right = previous/next slide; Up, Down, Select or Menu opens the controls.
+   With the controls open: Left/Right move between buttons, Select presses one, Up/Down/Back closes.
+   Arrow keys are handled here (default prevented) so they work the same with Silk's spatial navigation on or off. */
+var idleT, HOLD_MOUSE = 6000, HOLD_REMOTE = 15000;
+function wake(ms){ document.body.classList.remove('idle'); clearTimeout(idleT); idleT = setTimeout(sleep, ms || HOLD_MOUSE); }
+function sleep(){
+  if (bar.matches(':hover')){ idleT = setTimeout(sleep, HOLD_MOUSE); return; }   // pointer resting on the strip: keep it
+  document.body.classList.add('idle');
+  if (bar.contains(document.activeElement)) document.activeElement.blur();
+}
+function barButtons(){ return Array.prototype.filter.call(bar.querySelectorAll('button'), function(b){ return !b.disabled && b.offsetParent !== null; }); }
+function focusBar(target){
+  var bs = barButtons(); if (!bs.length) return;
+  var t = target || document.getElementById('pauseBtn');
+  if (bs.indexOf(t) < 0) t = bs[0];
+  t.focus();
+}
+function openBar(){ wake(HOLD_REMOTE); if (!bar.contains(document.activeElement)) focusBar(); }
+function closeBar(){
+  clearTimeout(idleT);
+  if (!PREVIEW) document.body.classList.add('idle');
+  if (bar.contains(document.activeElement)) document.activeElement.blur();
+}
+function keyName(e){
+  var k = e.key, c = e.keyCode;
+  if (k === 'ArrowLeft' || k === 'Left' || c === 37) return 'left';
+  if (k === 'ArrowRight' || k === 'Right' || c === 39) return 'right';
+  if (k === 'ArrowUp' || k === 'Up' || c === 38) return 'up';
+  if (k === 'ArrowDown' || k === 'Down' || c === 40) return 'down';
+  if (k === 'Enter' || c === 13) return 'select';
+  if (k === 'Escape' || k === 'GoBack' || c === 27 || c === 4) return 'back';
+  if (k === 'ContextMenu' || k === 'Menu' || c === 93) return 'menu';
+  if (k === 'MediaPlayPause' || c === 179) return 'playpause';
+  if (k === 'MediaFastForward' || k === 'MediaTrackNext' || k === 'PageDown' || c === 228 || c === 176) return 'next';
+  if (k === 'MediaRewind' || k === 'MediaTrackPrevious' || k === 'PageUp' || c === 227 || c === 177) return 'prev';
+  return '';
+}
 document.addEventListener('keydown', function(e){
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  var n = keyName(e), inBar = bar.contains(document.activeElement);
+  if (n === 'playpause'){ e.preventDefault(); setPaused(!paused); return; }
+  if (n === 'next'){ e.preventDefault(); step(1); return; }
+  if (n === 'prev'){ e.preventDefault(); step(-1); return; }
+  if (inBar){
+    if (n === 'left' || n === 'right'){
+      e.preventDefault(); wake(HOLD_REMOTE);
+      var bs = barButtons(), i = bs.indexOf(document.activeElement);
+      bs[Math.max(0, Math.min(bs.length - 1, (i < 0 ? 0 : i) + (n === 'right' ? 1 : -1)))].focus();
+    } else if (n === 'up' || n === 'down' || n === 'back' || n === 'menu'){
+      e.preventDefault(); closeBar();
+    } else if (n === 'select'){
+      wake(HOLD_REMOTE);   // the focused button handles Enter itself
+    }
+    return;
+  }
+  if (n === 'left'){ e.preventDefault(); step(-1); return; }
+  if (n === 'right'){ e.preventDefault(); step(1); return; }
+  if (n === 'up' || n === 'down' || n === 'select' || n === 'menu'){ e.preventDefault(); openBar(); return; }
+  if (n === 'back' && !document.body.classList.contains('idle')){ e.preventDefault(); closeBar(); return; }
   if (e.key === '1') setLayout('today');
   else if (e.key === '2') setLayout('league');
   else if (e.key === '3') setLayout('split');
   else if (e.key === 'd' || e.key === 'D'){ demo = !demo; refresh(); }
-  else if (e.key === 'ArrowRight' || e.key === 'PageDown') step(1);
-  else if (e.key === 'ArrowLeft' || e.key === 'PageUp') step(-1);
-  else if ((e.key === ' ' || e.key === 'p' || e.key === 'P' || e.key === 'MediaPlayPause') && document.activeElement.tagName !== 'BUTTON'){ e.preventDefault(); setPaused(!paused); }
+  else if (e.key === ' ' || e.key === 'p' || e.key === 'P'){ e.preventDefault(); setPaused(!paused); }
   else if ((e.key === 'f' || e.key === 'F') && document.documentElement.requestFullscreen){ document.documentElement.requestFullscreen().catch(function(){}); }
+}, true);
+document.addEventListener('keydown', function(e){
+  // Space or P while a button has focus: Space presses it (browser default); P still toggles pause.
+  if ((e.key === 'p' || e.key === 'P') && bar.contains(document.activeElement)) setPaused(!paused);
 });
-var idleT;
-function wake(){ document.body.classList.remove('idle'); clearTimeout(idleT); idleT = setTimeout(function(){ document.body.classList.add('idle'); }, 6000); }
-['mousemove','mousedown','touchstart','keydown'].forEach(function(ev){ document.addEventListener(ev, wake, {passive:true}); }); wake();
+['mousemove','mousedown','touchstart'].forEach(function(ev){ document.addEventListener(ev, function(){ wake(); }, {passive:true}); });
+wake();
 window.addEventListener('resize', fit);
 
 fit(); refresh();

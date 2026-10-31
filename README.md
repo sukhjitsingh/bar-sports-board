@@ -35,8 +35,12 @@ The workflow runs daily at 15:00 UTC, which is 8:00 AM Arizona time (GitHub cron
 
 Open `https://<your-username>.github.io/<repo-name>/tv.html` in the TV's browser (or cast the tab). It is built for 1920x1080 and scales to any screen.
 
-- **Picking a layout:** move the mouse, tap the screen or press any key on the remote or keyboard, and a picker appears at the bottom with all three layouts. The same picker has Prev, Pause/Play and Next buttons for the slides. While paused, a red "Paused" label stays in the footer and scores still update. Pick one and it hides again after 6 seconds. The choice is remembered on that TV.
-- **Layouts:** `tv.html#today` (all of today's games, big), `tv.html#league` (one league at a time, rotating), `tv.html#split` (live games on the left, up next on the right). The page remembers the last layout it showed. Keys 1, 2 and 3 switch layouts, Space or P pauses and resumes the rotation, the left and right arrow keys go to the previous and next slide, F goes fullscreen, D toggles sample scores (for testing).
+- **Remote control (Fire TV / Silk, spatial navigation on or off):** the page handles the d-pad itself, so it behaves the same in both modes.
+  - Controls hidden: **Left / Right** = previous / next slide. **Select, Up, Down or Menu** opens the control strip at the bottom of the screen.
+  - Controls open: **Left / Right** move between the buttons (Prev, Pause/Play, Next, then the three layouts), **Select** presses the highlighted button (white outline), **Up, Down or Back** closes the strip. It also closes by itself after 15 seconds.
+  - The Play/Pause, Fast-forward and Rewind keys on the remote pause, go to the next slide and go to the previous slide at any time.
+  - With a mouse or cursor: moving the pointer shows the strip, and it stays while the pointer rests on it. The strip sits in the footer, so it never covers the schedule. While paused, a red "Paused" label shows in the footer and scores keep updating.
+- **Layouts:** `tv.html#today` (all of today's games, big), `tv.html#league` (one league at a time, rotating), `tv.html#split` (live games on the left, up next on the right). The page remembers the last layout it showed. On a keyboard: 1, 2 and 3 switch layouts, Space or P pauses and resumes, F goes fullscreen, D toggles sample scores (for testing).
 - **Live scores:** while open, the page asks ESPN for today's scoreboard every 60 seconds when a game is live or about to start, and every 5 minutes otherwise. It also fills in TV channels and any games missing from `data.js`. If ESPN can't be reached, the footer says "Schedule as of ..." and the page keeps showing `data.js`.
 - **Schedule refresh:** it re-downloads `data.js` every 15 minutes and reloads itself every 6 hours, so nobody has to touch the TV.
 - **Preview without GitHub:** `node scripts/build-preview.mjs` writes `tv-preview.html` with data inlined and sample scores on.
