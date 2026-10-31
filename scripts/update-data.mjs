@@ -12,6 +12,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const OUT = fileURLToPath(new URL('../data.js', import.meta.url));
 const BASE = 'https://site.api.espn.com/apis/site/v2/sports';
+const LOGO_HOST = 'https://a.espncdn.com/';   // team logos are stored without this prefix to keep data.js small
 
 const TZ = 'America/Phoenix';   // defines what "today" means for the fetch window
 const DAYS_BACK = 1;            // include yesterday so recent finals show up
@@ -75,12 +76,21 @@ export function parseEvent(league, ev) {
     return league.college && rank && rank <= 25 ? `#${rank} ${name}` : name;
   };
 
+  // Logo for dark backgrounds when ESPN provides one, otherwise the standard logo.
+  const logo = (c) => {
+    const u = c.team.logoDark || c.team.logo;
+    return typeof u === 'string' && u.startsWith(LOGO_HOST) ? u.slice(LOGO_HOST.length) : undefined;
+  };
+  const la = logo(away), lh = logo(home);
+
   const g = {
     ...(ev.id ? { id: String(ev.id) } : {}),
     l: league.k,
     a: label(away),
     h: label(home),
-    t: t.toISOString().replace(/\.\d{3}Z$/, 'Z')
+    t: t.toISOString().replace(/\.\d{3}Z$/, 'Z'),
+    ...(la ? { la } : {}),
+    ...(lh ? { lh } : {})
   };
 
   const state = ev.status?.type?.state || comp.status?.type?.state; // pre | in | post
